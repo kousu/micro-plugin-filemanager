@@ -1,4 +1,4 @@
-VERSION = "3.5.0"
+VERSION = "3.6.0"
 
 local micro = import("micro")
 local display = import("micro/display")

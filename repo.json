@@ -31,6 +31,13 @@
 				"Require": {
 					"micro": ">=1.4.1"
 				}
+			},
+			{
+				"Version": "3.6.0",
+				"Url": "https://github.com/kousu/micro-plugin-filemanager/archive/v3.6.0.zip",
+				"Require": {
+					"micro": ">=2.0.0"
+				}
 			}
 		]
 	}
