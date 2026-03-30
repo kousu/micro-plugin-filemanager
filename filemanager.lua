@@ -513,7 +513,7 @@ local function open_tree()
 	micro.CurPane():VSplitIndex(buffer.NewBuffer("", "filemanager"), false)
 	-- Save the new view so we can access it later
 	tree_view = micro.CurPane()
-	
+
 	-- Set the width of tree_view to 30% & lock it
     tree_view:ResizePane(20)
 	-- Set the type to unsavable
@@ -1000,31 +1000,45 @@ end
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 -- @Jakku Night: Closes tree BEFORE switching tabs:
+local tree_was_open = false
+local function pre_tab_switch()
+	tree_was_open = tree_view ~= nil
+	if tree_was_open then
+		close_tree()
+	end
+end
+
+local function on_tab_switch()
+	if tree_was_open then
+		open_tree()
+	end
+end
+
 function preAddTab()
-	close_tree()
+	pre_tab_switch()
 end
 function preNextTab()
-	close_tree()
+	pre_tab_switch()
 end
 function prePreviousTab()
-	close_tree()
+	pre_tab_switch()
 end
 function preTabSwitchCmd()
-	close_tree()
+	pre_tab_switch()
 end
 
 -- @Jakku Night: Opens tree AFTER switching tabs:
 function onAddTab()
-	open_tree()
+	on_tab_switch()
 end
 function onNextTab()
-	open_tree()
+	on_tab_switch()
 end
 function onPreviousTab()
-	open_tree()
+	on_tab_switch()
 end
 function onTabSwitchCmd()
-	open_tree()
+	on_tab_switch()
 end
 
 -- Close current
