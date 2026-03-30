@@ -258,6 +258,7 @@ local function scanlist_is_empty()
 end
 
 local function refresh_view()
+	if tree_view == nil then return end
 	clear_messenger()
 
 	-- If it's less than 30, just use 30 for width. Don't want it too small
@@ -315,6 +316,7 @@ end
 
 -- Moves the cursor to the ".." in tree_view
 local function move_cursor_top()
+	if tree_view == nil then return end
 	-- 2 is the position of the ".."
 	tree_view.Cursor.Loc.Y = 2
 
@@ -469,11 +471,9 @@ end
 
 -- Changes the current dir in the top of the tree..
 -- then scans that dir, and prints it to the view
-local function update_current_dir(path)
+function update_current_dir(path)
 	-- Clear the highest since this is a full refresh
 	highest_visible_indent = 0
-	-- Set the width back to 30
-	tree_view:ResizePane(30)
 	-- Update the current dir to the new path
 	current_dir = path
 
@@ -535,7 +535,7 @@ local function open_tree()
     tree_view.Buf:SetOptionNative("scrollbar", false)
 
 	-- Fill the scanlist, and then print its contents to tree_view
-	update_current_dir(os.Getwd())
+	update_current_dir(current_dir)
 	-- @Jakku Night: Moves the cursor to the next tab:
 	micro.CurPane():NextSplit()
 end
@@ -956,6 +956,91 @@ function try_open_at_cursor()
 	end
 
 	try_open_at_y(tree_view.Cursor.Loc.Y)
+end
+
+-- Navigate the tree to show and highlight the given absolute path.
+-- Opens the tree if it isn't already open.
+-- If the path is not under the current root, re-roots the tree at the
+-- path's parent directory first.
+function Focus(path)
+	-- If the tree isn't open, nothing to navigate.
+	if tree_view == nil then
+		return
+	end
+
+	if path == nil then
+		micro.Log("filemanager:Focus: path was nil " .. path)
+		micro.InfoBar():Error("filemanager: no path given")
+		return
+	end
+
+	-- Resolve relative paths against the configured root (or current_dir).
+	if filepath.IsAbs(path) then
+		path = filepath.Clean(path)
+	else
+		path = filepath.Join(current_dir, path)
+	end
+
+	-- If the tree isn't open, nothing to navigate.
+	if tree_view == nil then return end
+
+	-- Check whether path is under current_dir; if not, re-root at the
+	-- deepest ancestor we can (the path's parent dir for files, the path
+	-- itself for directories).
+	local file_stat, stat_err = os.Stat(path)
+	if stat_err ~= nil then
+		micro.Log(path .. ": "  .. stat_err:Error())
+		micro.InfoBar():Error("filemanager:Focus: " .. path .. ": "  .. stat_err:Error())
+		return
+	end
+
+	local root
+	if file_stat:IsDir() then
+		root = path
+	else
+		root = filepath.Dir(path)
+	end
+
+	-- Re-root the tree if the target isn't under the current root
+	local function has_prefix(s, prefix)
+		return string.sub(s, 1, #prefix) == prefix
+	end
+
+	if not has_prefix(path, current_dir) then
+		update_current_dir(root)
+		if target_is_dir then
+			move_cursor_top()
+			return
+		end
+	end
+
+	-- If the target is a directory at the root level, just move to top
+	if target_is_dir and path == current_dir then
+		move_cursor_top()
+		return
+	end
+
+	-- Walk the scanlist, expanding directories along the path as needed,
+	-- until we find the target entry.
+	local i = 1
+	while i <= #scanlist do
+		local entry = scanlist[i]
+		if entry.abspath == path then
+			-- Found it — move cursor here (+2 offset for the header lines)
+			tree_view.Cursor.Loc.Y = i + 2
+			select_line()
+			return
+		end
+		-- If this directory is an ancestor of our target, expand it
+		if entry.dirmsg == "+" and has_prefix(path, entry.abspath .. "/") then
+			uncompress_target(i)
+			-- uncompress_target inserts items after i; restart scan from i+1
+			-- (don't increment i so we re-examine the now-expanded dir entry)
+		end
+		i = i + 1
+	end
+
+	micro.InfoBar():Error("filemanager: could not find path in tree: " .. path)
 end
 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
