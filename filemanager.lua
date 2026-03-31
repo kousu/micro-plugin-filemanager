@@ -508,6 +508,7 @@ local function go_back_dir()
 end
 
 local pane_width = 30
+local tree_focused = false
 
 -- open_tree setup's the view
 local function open_tree()
@@ -538,8 +539,12 @@ local function open_tree()
 
 	-- Fill the scanlist, and then print its contents to tree_view
 	update_current_dir(current_dir)
-	-- @Jakku Night: Moves the cursor to the next tab:
+	-- @Jakku Night: Moves the cursor to the next tab and as an *important side effect* triggers onSetActive
 	micro.CurPane():NextSplit()
+	-- Keep focus on the tree
+	if tree_focused then
+		tree_view:Tab():SetActive(0)
+	end
 end
 
 -- close_tree will close the tree plugin view and release memory.
@@ -547,10 +552,13 @@ local function close_tree()
 
 	if tree_view ~= nil then
 		pane_width = tree_view:GetView().Width
+		tree_focused = (micro.CurPane() == tree_view)
 
 		tree_view:Quit()
 		tree_view = nil
 		clear_messenger()
+	else
+		tree_focused = false
 	end
 end
 
