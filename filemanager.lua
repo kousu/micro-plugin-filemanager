@@ -1113,6 +1113,22 @@ end
 function prePreviousTab()
 	pre_tab_switch()
 end
+function preFirstTab()
+	if not tree_was_open then
+		-- wrapping around to the left is defined by NextTab|FirstTab, falling back from one to the other
+		-- if we run pre_tab_switch twice in a row, we'll incorrectly close the filemanager pane
+		-- XXX unsure about this
+		pre_tab_switch()
+	end
+end
+function preLastTab()
+	if not tree_was_open then
+		-- wrapping around to the left is defined by PreviousTab|LastTab
+		-- if we run pre_tab_switch twice in a row, we'll incorrectly close the filemanager pane
+		-- XXX unsure about this
+	  pre_tab_switch()
+	end
+end
 function preTabSwitchCmd()
 	pre_tab_switch()
 end
@@ -1125,6 +1141,12 @@ function onNextTab()
 	on_tab_switch()
 end
 function onPreviousTab()
+	on_tab_switch()
+end
+function onFirstTab()
+	on_tab_switch()
+end
+function onLastTab()
 	on_tab_switch()
 end
 function onTabSwitchCmd()
