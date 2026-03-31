@@ -218,7 +218,7 @@ end
 -- Joins the target dir's leading path to the passed name
 local function dirname_and_join(path, join_name)
 	-- The leading path to the dir we're in
-	local leading_path = DirectoryName(path)
+	local leading_path = filepath.Dir(path)
 	-- Joins with OS-specific slashes
 	return filepath.Join(leading_path, join_name)
 end
@@ -846,15 +846,21 @@ local function create_filedir(filedir_name, make_dir)
 end
 
 -- Triggered with "touch filename"
-function new_file(input_name)
-	-- False because not a dir
-	create_filedir(input_name, false)
+function new_file(bp, args)
+	for i = 1, #args do
+		local input_name = args[i]
+		-- False because not a dir
+		create_filedir(input_name, false)
+	end
 end
 
 -- Triggered with "mkdir dirname"
-function new_dir(input_name)
-	-- True because dir
-	create_filedir(input_name, true)
+function new_dir(bp, args)
+	for i = 1, #args do
+		local input_name = args[i]
+		-- True because dir
+		create_filedir(input_name, true)
+	end
 end
 
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
