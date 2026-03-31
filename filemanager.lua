@@ -507,6 +507,8 @@ local function go_back_dir()
 	end
 end
 
+local pane_width = 30
+
 -- open_tree setup's the view
 local function open_tree()
 	-- Open a new Vsplit (on the very left)
@@ -515,7 +517,7 @@ local function open_tree()
 	tree_view = micro.CurPane()
 
 	-- Set the width of tree_view to 30% & lock it
-    tree_view:ResizePane(20)
+    tree_view:ResizePane(pane_width)
 	-- Set the type to unsavable
     -- tree_view.Buf.Type = buffer.BTLog
     tree_view.Buf.Type.Scratch = true
@@ -542,7 +544,10 @@ end
 
 -- close_tree will close the tree plugin view and release memory.
 local function close_tree()
+
 	if tree_view ~= nil then
+		pane_width = tree_view:GetView().Width
+
 		tree_view:Quit()
 		tree_view = nil
 		clear_messenger()
@@ -643,7 +648,7 @@ local function uncompress_target(y)
 				-- Save the new highest indent
 				highest_visible_indent = scanlist[y].indent
 				-- Increase the width to fit the new nested content
-				tree_view:ResizePane(tree_view:GetView().Width + scanlist[y].indent)
+				-- tree_view:ResizePane(tree_view:GetView().Width + scanlist[y].indent)
 			end
 		end
 
