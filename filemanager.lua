@@ -510,7 +510,7 @@ end
 local pane_width = 30
 local tree_focused = false
 
--- open_tree setup's the view
+-- open_tree sets up the view
 local function open_tree()
 	-- Open a new Vsplit (on the very left)
 	micro.CurPane():VSplitIndex(buffer.NewBuffer("", "filemanager"), false)
@@ -537,8 +537,8 @@ local function open_tree()
     tree_view.Buf:SetOptionNative("statusformatl", "filemanager")
     tree_view.Buf:SetOptionNative("scrollbar", false)
 
-	-- Fill the scanlist, and then print its contents to tree_view
-	update_current_dir(current_dir)
+	refresh_view()
+
 	-- @Jakku Night: Moves the cursor to the next tab and as an *important side effect* triggers onSetActive
 	micro.CurPane():NextSplit()
 	-- Keep focus on the tree
