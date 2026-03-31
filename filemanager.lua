@@ -524,17 +524,17 @@ local tree_focused = false
 
 -- open_tree sets up the view
 local function open_tree()
+	local tree_buf = buffer.NewBuffer("", "filemanager")
+	tree_buf.Type.Scratch = true -- Set the type to unsavable
+	tree_buf.Type.Readonly = true
+
 	-- Open a new Vsplit (on the very left)
-	micro.CurPane():VSplitIndex(buffer.NewBuffer("", "filemanager"), false)
+	micro.CurPane():VSplitIndex(tree_buf, false)
 	-- Save the new view so we can access it later
 	tree_view = micro.CurPane()
 
 	-- Set the width of tree_view to 30% & lock it
 	tree_view:ResizePane(pane_width)
-	-- Set the type to unsavable
-	-- tree_view.Buf.Type = buffer.BTLog
-	tree_view.Buf.Type.Scratch = true
-	tree_view.Buf.Type.Readonly = true
 
 	-- Set the various display settings, but only on our view (by using SetLocalOption instead of SetOption)
 	-- NOTE: Micro requires the true/false to be a string
