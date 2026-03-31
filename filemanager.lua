@@ -36,7 +36,7 @@ local function new_listobj(p, d, o, i)
 		end,
 		["increase_owner"] = function(self, plus_num)
 			self.owner = self.owner + plus_num
-		end
+		end,
 	}
 end
 
@@ -87,8 +87,9 @@ local function get_ignored_files(tar_dir)
 		-- Cut off the newline that is at the end of each result
 		for split_results in string.gmatch(git_ls_results, "([^\r\n]+)") do
 			-- git ls-files adds a trailing slash if it's a dir, so we remove it (if it is one)
-			readout_results[#readout_results + 1] =
-				(string.sub(split_results, -1) == "/" and string.sub(split_results, 1, -2) or split_results)
+			readout_results[#readout_results + 1] = (
+				string.sub(split_results, -1) == "/" and string.sub(split_results, 1, -2) or split_results
+			)
 		end
 	end
 
@@ -258,7 +259,9 @@ local function scanlist_is_empty()
 end
 
 local function refresh_view()
-	if tree_view == nil then return end
+	if tree_view == nil then
+		return
+	end
 	clear_messenger()
 
 	-- If it's less than 30, just use 30 for width. Don't want it too small
@@ -311,12 +314,14 @@ local function refresh_view()
 	end
 
 	-- Resizes all views after messing with ours
-    tree_view:Tab():Resize()
+	tree_view:Tab():Resize()
 end
 
 -- Moves the cursor to the ".." in tree_view
 local function move_cursor_top()
-	if tree_view == nil then return end
+	if tree_view == nil then
+		return
+	end
 	-- 2 is the position of the ".."
 	tree_view.Cursor.Loc.Y = 2
 
@@ -345,7 +350,7 @@ local function compress_target(y, delete_y)
 	if scanlist[y].dirmsg == "-" then
 		local target_index, delete_index
 		-- Add the original target y to stuff to delete
-		local delete_under = {[1] = y}
+		local delete_under = { [1] = y }
 		local new_table = {}
 		local del_count = 0
 		-- Loop through the whole table, looking for nested content, or stuff with ownership == y...
@@ -432,7 +437,7 @@ local function compress_target(y, delete_y)
 
 	if tree_view:GetView().Width > (30 + highest_visible_indent) then
 		-- Shave off some width
-        tree_view:ResizePane(30 + highest_visible_indent)
+		tree_view:ResizePane(30 + highest_visible_indent)
 	end
 
 	refresh_and_select()
@@ -449,24 +454,31 @@ function prompt_delete_at_cursor()
 		return
 	end
 
-    micro.InfoBar():YNPrompt("Do you want to delete the " .. (scanlist[y].dirmsg ~= "" and "dir" or "file") .. ' "' .. scanlist[y].abspath .. '"? ', function(yes, canceled)
-        if yes and not canceled then
-            -- Use Go's os.Remove to delete the file
-            local go_os = import("os")
-            -- Delete the target (if its a dir then the children too)
-            local remove_log = go_os.RemoveAll(scanlist[y].abspath)
-            if remove_log == nil then
-                micro.InfoBar():Message("Filemanager deleted: ", scanlist[y].abspath)
-                -- Remove the target (and all nested) from scanlist[y + 1]
-                -- true to delete y
-                compress_target(get_safe_y(), true)
-            else
-                micro.InfoBar():Error("Failed deleting file/dir: ", remove_log)
-            end
-        else
-            micro.InfoBar():Message("Nothing was deleted")
-        end
-    end)
+	micro.InfoBar():YNPrompt(
+		"Do you want to delete the "
+			.. (scanlist[y].dirmsg ~= "" and "dir" or "file")
+			.. ' "'
+			.. scanlist[y].abspath
+			.. '"? ',
+		function(yes, canceled)
+			if yes and not canceled then
+				-- Use Go's os.Remove to delete the file
+				local go_os = import("os")
+				-- Delete the target (if its a dir then the children too)
+				local remove_log = go_os.RemoveAll(scanlist[y].abspath)
+				if remove_log == nil then
+					micro.InfoBar():Message("Filemanager deleted: ", scanlist[y].abspath)
+					-- Remove the target (and all nested) from scanlist[y + 1]
+					-- true to delete y
+					compress_target(get_safe_y(), true)
+				else
+					micro.InfoBar():Error("Failed deleting file/dir: ", remove_log)
+				end
+			else
+				micro.InfoBar():Message("Nothing was deleted")
+			end
+		end
+	)
 end
 
 -- Changes the current dir in the top of the tree..
@@ -518,24 +530,24 @@ local function open_tree()
 	tree_view = micro.CurPane()
 
 	-- Set the width of tree_view to 30% & lock it
-    tree_view:ResizePane(pane_width)
+	tree_view:ResizePane(pane_width)
 	-- Set the type to unsavable
-    -- tree_view.Buf.Type = buffer.BTLog
-    tree_view.Buf.Type.Scratch = true
-    tree_view.Buf.Type.Readonly = true
+	-- tree_view.Buf.Type = buffer.BTLog
+	tree_view.Buf.Type.Scratch = true
+	tree_view.Buf.Type.Readonly = true
 
 	-- Set the various display settings, but only on our view (by using SetLocalOption instead of SetOption)
 	-- NOTE: Micro requires the true/false to be a string
 	-- Softwrap long strings (the file/dir paths)
-    tree_view.Buf:SetOptionNative("softwrap", true)
-    -- No line numbering
-    tree_view.Buf:SetOptionNative("ruler", false)
-    -- Is this needed with new non-savable settings from being "vtLog"?
-    tree_view.Buf:SetOptionNative("autosave", false)
-    -- Don't show the statusline to differentiate the view from normal views
-    tree_view.Buf:SetOptionNative("statusformatr", "")
-    tree_view.Buf:SetOptionNative("statusformatl", "filemanager")
-    tree_view.Buf:SetOptionNative("scrollbar", false)
+	tree_view.Buf:SetOptionNative("softwrap", true)
+	-- No line numbering
+	tree_view.Buf:SetOptionNative("ruler", false)
+	-- Is this needed with new non-savable settings from being "vtLog"?
+	tree_view.Buf:SetOptionNative("autosave", false)
+	-- Don't show the statusline to differentiate the view from normal views
+	tree_view.Buf:SetOptionNative("statusformatr", "")
+	tree_view.Buf:SetOptionNative("statusformatl", "filemanager")
+	tree_view.Buf:SetOptionNative("scrollbar", false)
 
 	refresh_view()
 
@@ -549,7 +561,6 @@ end
 
 -- close_tree will close the tree plugin view and release memory.
 local function close_tree()
-
 	if tree_view ~= nil then
 		pane_width = tree_view:GetView().Width
 		tree_focused = (micro.CurPane() == tree_view)
@@ -570,7 +581,6 @@ function toggle_tree()
 		close_tree()
 	end
 end
-
 
 -- Tries to open the current index
 -- If it's the top dir indicator, or separator, nothing happens
@@ -595,7 +605,7 @@ local function try_open_at_y(y)
 			--micro.CurPane():VSplitIndex(buffer.NewBufferFromFile(scanlist[y].abspath), true)
 			-- @Jakku Night: Open file in a new tab:
 			close_tree()
-			micro.CurPane():NewTabCmd({scanlist[y].abspath})
+			micro.CurPane():NewTabCmd({ scanlist[y].abspath })
 			open_tree()
 			-- Resizes all views after opening a file
 			-- tabs[curTab + 1]:Resize()
@@ -995,15 +1005,17 @@ function Focus(path)
 	end
 
 	-- If the tree isn't open, nothing to navigate.
-	if tree_view == nil then return end
+	if tree_view == nil then
+		return
+	end
 
 	-- Check whether path is under current_dir; if not, re-root at the
 	-- deepest ancestor we can (the path's parent dir for files, the path
 	-- itself for directories).
 	local file_stat, stat_err = os.Stat(path)
 	if stat_err ~= nil then
-		micro.Log(path .. ": "  .. stat_err:Error())
-		micro.InfoBar():Error("filemanager:Focus: " .. path .. ": "  .. stat_err:Error())
+		micro.Log(path .. ": " .. stat_err:Error())
+		micro.InfoBar():Error("filemanager:Focus: " .. path .. ": " .. stat_err:Error())
 		return
 	end
 
@@ -1134,7 +1146,7 @@ function preLastTab()
 		-- wrapping around to the left is defined by PreviousTab|LastTab
 		-- if we run pre_tab_switch twice in a row, we'll incorrectly close the filemanager pane
 		-- XXX unsure about this
-	  pre_tab_switch()
+		pre_tab_switch()
 	end
 end
 function preTabSwitchCmd()
@@ -1266,7 +1278,9 @@ end
 
 -- @Jakku Night: Opens a new tree if tab switched:
 function onMousePress(view, event)
-	if tree_view == nil then return end
+	if tree_view == nil then
+		return
+	end
 	if micro.CurTab() ~= tree_view:Tab() then
 		micro.InfoBar():Message("Tab was Switched.")
 	end
@@ -1328,10 +1342,10 @@ function preInsertTab(view)
 	end
 end
 function preInsertNewline(view)
-    if view == tree_view then
-        return false
-    end
-    return true
+	if view == tree_view then
+		return false
+	end
+	return true
 end
 -- CtrlL
 function onJumpLine(view)
@@ -1399,7 +1413,7 @@ function preStartOfLine(view)
 end
 
 function preStartOfText(view)
-    return false_if_tree(view)
+	return false_if_tree(view)
 end
 
 function preEndOfLine(view)
@@ -1447,7 +1461,7 @@ function preSelectToStartOfLine(view)
 end
 
 function preSelectToStartOfText(view)
-    return false_if_tree(view)
+	return false_if_tree(view)
 end
 
 function preSelectToEndOfLine(view)
@@ -1515,47 +1529,47 @@ function preSelectAll(view)
 end
 
 function init()
-    -- Let the user disable showing of dotfiles like ".editorconfig" or ".DS_STORE"
-    config.RegisterCommonOption("filemanager", "showdotfiles", true)
-    -- Let the user disable showing files ignored by the VCS (i.e. gitignored)
-    config.RegisterCommonOption("filemanager", "showignored", true)
-    -- Let the user disable going to parent directory via left arrow key when file selected (not directory)
-    config.RegisterCommonOption("filemanager", "compressparent", true)
-    -- Let the user choose to list sub-folders first when listing the contents of a folder
-    config.RegisterCommonOption("filemanager", "foldersfirst", true)
-    -- Lets the user have the filetree auto-open any time Micro is opened
-    -- false by default, as it's a rather noticable user-facing change
-    config.RegisterCommonOption("filemanager", "openonstart", true)
+	-- Let the user disable showing of dotfiles like ".editorconfig" or ".DS_STORE"
+	config.RegisterCommonOption("filemanager", "showdotfiles", true)
+	-- Let the user disable showing files ignored by the VCS (i.e. gitignored)
+	config.RegisterCommonOption("filemanager", "showignored", true)
+	-- Let the user disable going to parent directory via left arrow key when file selected (not directory)
+	config.RegisterCommonOption("filemanager", "compressparent", true)
+	-- Let the user choose to list sub-folders first when listing the contents of a folder
+	config.RegisterCommonOption("filemanager", "foldersfirst", true)
+	-- Lets the user have the filetree auto-open any time Micro is opened
+	-- false by default, as it's a rather noticable user-facing change
+	config.RegisterCommonOption("filemanager", "openonstart", true)
 
-    -- Open/close the tree view
-    config.MakeCommand("tree", toggle_tree, config.NoComplete)
-    -- Rename the file/dir under the cursor
-    config.MakeCommand("rename", rename_at_cursor, config.NoComplete)
-    -- Create a new file
-    config.MakeCommand("touch", new_file, config.NoComplete)
-    -- Create a new dir
-    config.MakeCommand("mkdir", new_dir, config.NoComplete)
-    -- Delete a file/dir, and anything contained in it if it's a dir
-    config.MakeCommand("rm", prompt_delete_at_cursor, config.NoComplete)
-    -- Adds colors to the ".." and any dir's in the tree view via syntax highlighting
-    -- TODO: Change it to work with git, based on untracked/changed/added/whatever
-    config.AddRuntimeFile("filemanager", config.RTSyntax, "syntax.yaml")
+	-- Open/close the tree view
+	config.MakeCommand("tree", toggle_tree, config.NoComplete)
+	-- Rename the file/dir under the cursor
+	config.MakeCommand("rename", rename_at_cursor, config.NoComplete)
+	-- Create a new file
+	config.MakeCommand("touch", new_file, config.NoComplete)
+	-- Create a new dir
+	config.MakeCommand("mkdir", new_dir, config.NoComplete)
+	-- Delete a file/dir, and anything contained in it if it's a dir
+	config.MakeCommand("rm", prompt_delete_at_cursor, config.NoComplete)
+	-- Adds colors to the ".." and any dir's in the tree view via syntax highlighting
+	-- TODO: Change it to work with git, based on untracked/changed/added/whatever
+	config.AddRuntimeFile("filemanager", config.RTSyntax, "syntax.yaml")
 
-    -- NOTE: This must be below the syntax load command or coloring won't work
-    -- Just auto-open if the option is enabled
-    -- This will run when the plugin first loads
-    if config.GetGlobalOption("filemanager.openonstart") then
-        -- Check for safety on the off-chance someone's init.lua breaks this
-        if tree_view == nil then
-            open_tree()
-            -- Puts the cursor back in the empty view that initially spawns
-            -- This is so the cursor isn't sitting in the tree view at startup
-            micro.CurPane():NextSplit()
-        else
-            -- Log error so they can fix it
-            micro.Log(
-                "Warning: filemanager.openonstart was enabled, but somehow the tree was already open so the option was ignored."
-            )
-        end
-    end
+	-- NOTE: This must be below the syntax load command or coloring won't work
+	-- Just auto-open if the option is enabled
+	-- This will run when the plugin first loads
+	if config.GetGlobalOption("filemanager.openonstart") then
+		-- Check for safety on the off-chance someone's init.lua breaks this
+		if tree_view == nil then
+			open_tree()
+			-- Puts the cursor back in the empty view that initially spawns
+			-- This is so the cursor isn't sitting in the tree view at startup
+			micro.CurPane():NextSplit()
+		else
+			-- Log error so they can fix it
+			micro.Log(
+				"Warning: filemanager.openonstart was enabled, but somehow the tree was already open so the option was ignored."
+			)
+		end
+	end
 end
