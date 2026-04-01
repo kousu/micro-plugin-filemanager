@@ -8,12 +8,6 @@ local buffer = import("micro/buffer")
 local os = import("os")
 local filepath = import("path/filepath")
 
--- Clear out all stuff in Micro's messenger
-local function clear_messenger()
-	-- messenger:Reset()
-	-- messenger:Clear()
-end
-
 -- Holds the micro.CurPane() we're manipulating
 local tree_view = nil
 -- Keeps track of the current working directory
@@ -238,6 +232,8 @@ local function select_line(last_y)
 		tree_view.Cursor.Loc.Y = 2
 	end
 
+	-- micro.Log("select_line: cursor = " .. tostring(tree_view.Cursor.Loc.X) .. ", " .. tostring(tree_view.Cursor.Loc.Y))
+
 	-- Puts the cursor back in bounds (if it isn't) for safety
 	tree_view.Cursor:Relocate()
 
@@ -258,14 +254,12 @@ local function scanlist_is_empty()
 	end
 end
 
-local function refresh_view()
+local function refresh_view(tree_view)
 	if tree_view == nil then
 		return
 	end
-	clear_messenger()
 
 	-- If it's less than 30, just use 30 for width. Don't want it too small
-
 	if tree_view:GetView().Width < 30 then
 		tree_view:ResizePane(30)
 	end
@@ -317,6 +311,16 @@ local function refresh_view()
 	tree_view:Tab():Resize()
 end
 
+local function focus_pane(view)
+	local tab = view:Tab()
+	for i = 1, #tab.Panes do
+		if tab.Panes[i]:ID() == view:ID() then
+			tab:SetActive(i - 1) -- SetActive takes 0-based Go index
+			break
+		end
+	end
+end
+
 -- Moves the cursor to the ".." in tree_view
 local function move_cursor_top()
 	if tree_view == nil then
@@ -329,12 +333,12 @@ local function move_cursor_top()
 	select_line()
 end
 
-local function refresh_and_select()
+local function refresh_and_select(tree_view)
 	-- Save the cursor position before messing with the view..
 	-- because changing contents in the view causes the Y loc to move
 	local last_y = tree_view.Cursor.Loc.Y
 	-- Actually refresh
-	refresh_view()
+	refresh_view(tree_view)
 	-- Moves the cursor back to it's original position
 	select_line(last_y)
 end
@@ -440,7 +444,7 @@ local function compress_target(y, delete_y)
 		tree_view:ResizePane(30 + highest_visible_indent)
 	end
 
-	refresh_and_select()
+	refresh_and_select(tree_view)
 end
 
 -- Prompts the user for deletion of a file/dir when triggered
@@ -484,6 +488,7 @@ end
 -- Changes the current dir in the top of the tree..
 -- then scans that dir, and prints it to the view
 function update_current_dir(path)
+	micro.Log("filemanager: update_current_dir to " .. path)
 	-- Clear the highest since this is a full refresh
 	highest_visible_indent = 0
 	-- Update the current dir to the new path
@@ -502,9 +507,12 @@ function update_current_dir(path)
 		scanlist = {}
 	end
 
-	refresh_view()
+	-- XXX this is .. probably necessary?? except focus_pane triggers it too? I think?
+	-- refresh_view(tree_view)
 	-- Since we're going into a new dir, move cursor to the ".." by default
-	move_cursor_top()
+	-- move_cursor_top()
+
+	focus_pane(micro.CurPane())
 end
 
 -- (Tries to) go back one "step" from the current directory
@@ -519,64 +527,56 @@ local function go_back_dir()
 	end
 end
 
-local pane_width = 30
-local tree_focused = false
-
 -- open_tree sets up the view
 local function open_tree()
 	local tree_buf = buffer.NewBuffer("", "filemanager")
 	tree_buf.Type.Scratch = true -- Set the type to unsavable
 	tree_buf.Type.Readonly = true
 
-	-- Open a new Vsplit (on the very left)
-	micro.CurPane():VSplitIndex(tree_buf, false)
-	-- Save the new view so we can access it later
-	tree_view = micro.CurPane()
-
-	-- Set the width of tree_view to 30% & lock it
-	tree_view:ResizePane(pane_width)
-
 	-- Set the various display settings, but only on our view (by using SetLocalOption instead of SetOption)
 	-- NOTE: Micro requires the true/false to be a string
 	-- Softwrap long strings (the file/dir paths)
-	tree_view.Buf:SetOptionNative("softwrap", true)
+	tree_buf:SetOptionNative("softwrap", true)
 	-- No line numbering
-	tree_view.Buf:SetOptionNative("ruler", false)
+	tree_buf:SetOptionNative("ruler", false)
 	-- Is this needed with new non-savable settings from being "vtLog"?
-	tree_view.Buf:SetOptionNative("autosave", false)
+	tree_buf:SetOptionNative("autosave", false)
 	-- Don't show the statusline to differentiate the view from normal views
-	tree_view.Buf:SetOptionNative("statusformatr", "")
-	tree_view.Buf:SetOptionNative("statusformatl", "filemanager")
-	tree_view.Buf:SetOptionNative("scrollbar", false)
+	tree_buf:SetOptionNative("statusformatr", "")
+	tree_buf:SetOptionNative("statusformatl", "filemanager")
+	tree_buf:SetOptionNative("scrollbar", false)
 
-	refresh_view()
+	-- Open a new Vsplit (on the very left)
+	micro.Log("open_tree: creating a vsplit for the filemanager")
+	micro.CurPane():VSplitIndex(tree_buf, false)
 
-	-- @Jakku Night: Moves the cursor to the next tab and as an *important side effect* triggers onSetActive
-	micro.CurPane():NextSplit()
-	-- Keep focus on the tree
-	if tree_focused then
-		tree_view:Tab():SetActive(0)
-	end
+	-- make this new pane (created by the previous call) the active tree_view
+	local tree_view = micro.CurPane()
+	tree_focused = true -- by default new panes are focused; track this
+
+	micro.Log("open_tree: setting initial size")
+	tree_view:ResizePane(30) -- default size
+
+	-- micro.Log("open_tree: redrawing")
+	-- refresh_view(tree_view)
+	return tree_view
 end
 
 -- close_tree will close the tree plugin view and release memory.
 local function close_tree()
 	if tree_view ~= nil then
-		pane_width = tree_view:GetView().Width
-		tree_focused = (micro.CurPane() == tree_view)
-
-		tree_view:Quit()
-		tree_view = nil
-		clear_messenger()
-	else
-		tree_focused = false
+		local _tree_view = tree_view
+		tree_view = nil -- take this out of the globals so we won't accidentally think we *should* be shown
+		_tree_view:Quit()
 	end
 end
 
 -- toggle_tree will toggle the tree view visible (create) and hide (delete).
 function toggle_tree()
 	if tree_view == nil then
-		open_tree()
+		local current_view = micro.CurPane()
+		tree_view = open_tree()
+		focus_pane(current_view) -- trigger the filemanager to sync up
 	else
 		close_tree()
 	end
@@ -601,14 +601,8 @@ local function try_open_at_y(y)
 		else
 			-- If it's a file, then open it
 			micro.InfoBar():Message("Filemanager opened ", scanlist[y].abspath)
-			-- Opens the absolute path in new vertical view
-			--micro.CurPane():VSplitIndex(buffer.NewBufferFromFile(scanlist[y].abspath), true)
 			-- @Jakku Night: Open file in a new tab:
-			close_tree()
 			micro.CurPane():NewTabCmd({ scanlist[y].abspath })
-			open_tree()
-			-- Resizes all views after opening a file
-			-- tabs[curTab + 1]:Resize()
 		end
 	else
 		micro.InfoBar():Error("Can't open that")
@@ -670,7 +664,7 @@ local function uncompress_target(y)
 			end
 		end
 
-		refresh_and_select()
+		refresh_and_select(tree_view)
 	end
 end
 
@@ -737,7 +731,7 @@ function rename_at_cursor(new_name)
 	-- Replace the old path with the new path
 	scanlist[y].abspath = new_path
 	-- Refresh the tree with our new name
-	refresh_and_select()
+	refresh_and_select(tree_view)
 end
 
 -- Prompts the user for the file/dir name, then creates the file/dir using Go's os package
@@ -988,11 +982,12 @@ end
 function Focus(path)
 	-- If the tree isn't open, nothing to navigate.
 	if tree_view == nil then
+		micro.Log("filemanager:Focus: trew_view was nil ")
 		return
 	end
 
 	if path == nil then
-		micro.Log("filemanager:Focus: path was nil " .. path)
+		micro.Log("filemanager:Focus: path was nil ")
 		micro.InfoBar():Error("filemanager: no path given")
 		return
 	end
@@ -1003,11 +998,7 @@ function Focus(path)
 	else
 		path = filepath.Join(current_dir, path)
 	end
-
-	-- If the tree isn't open, nothing to navigate.
-	if tree_view == nil then
-		return
-	end
+	micro.Log("filemanager:Focus: path = " .. path)
 
 	-- Check whether path is under current_dir; if not, re-root at the
 	-- deepest ancestor we can (the path's parent dir for files, the path
@@ -1015,49 +1006,58 @@ function Focus(path)
 	local file_stat, stat_err = os.Stat(path)
 	if stat_err ~= nil then
 		micro.Log(path .. ": " .. stat_err:Error())
-		micro.InfoBar():Error("filemanager:Focus: " .. path .. ": " .. stat_err:Error())
+		-- micro.InfoBar():Error("filemanager:Focus: " .. path .. ": " .. stat_err:Error())
 		return
 	end
 
+	local target_is_dir = file_stat:IsDir()
 	local root
-	if file_stat:IsDir() then
+	if target_is_dir then
+		-- micro.Log("filemanager:Focus: path was dir ")
 		root = path
 	else
+		-- micro.Log("filemanager:Focus: path was not dir ")
 		root = filepath.Dir(path)
 	end
+	-- micro.Log("filemanager:Focus: root = " .. root)
 
 	-- Re-root the tree if the target isn't under the current root
+	-- XXX i think better behaviour here is to re-root the the nearest common ancestor?
 	local function has_prefix(s, prefix)
 		return string.sub(s, 1, #prefix) == prefix
 	end
 
 	if not has_prefix(path, current_dir) then
+		micro.Log("filemanager:Focus: re-rooting to root = " .. root)
 		update_current_dir(root)
-		if target_is_dir then
-			move_cursor_top()
-			return
-		end
 	end
 
-	-- If the target is a directory at the root level, just move to top
-	if target_is_dir and path == current_dir then
+	if target_is_dir then
+		-- micro.Log("filemanager:Focus: calling move_cursor_top")
 		move_cursor_top()
 		return
 	end
 
+	-- micro.Log("filemanager:Focus: walking scanlist which is " .. tostring(#scanlist) .. " long")
 	-- Walk the scanlist, expanding directories along the path as needed,
 	-- until we find the target entry.
 	local i = 1
 	while i <= #scanlist do
 		local entry = scanlist[i]
+		-- micro.Log("filemanager:Focus: " .. entry.abspath)
 		if entry.abspath == path then
 			-- Found it — move cursor here (+2 offset for the header lines)
 			tree_view.Cursor.Loc.Y = i + 2
-			select_line()
+			micro.Log(
+				-- "filemanager:Focus: found target at " .. tostring(i) .. "; meanwhile tree_view = " .. tostring(tree_view)
+			)
+
+			refresh_and_select(tree_view)
 			return
 		end
 		-- If this directory is an ancestor of our target, expand it
 		if entry.dirmsg == "+" and has_prefix(path, entry.abspath .. "/") then
+			-- micro.Log("filemanager:Focus: uncompressing(" .. tostring(i) .. ")")
 			uncompress_target(i)
 			-- uncompress_target inserts items after i; restart scan from i+1
 			-- (don't increment i so we re-examine the now-expanded dir entry)
@@ -1108,89 +1108,170 @@ end
 -- All the events for certain Micro keys go below here
 -- Other than things we flat-out fail
 -- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--
 
--- @Jakku Night: Closes tree BEFORE switching tabs:
-local tree_was_open = false
-local function pre_tab_switch()
-	tree_was_open = tree_view ~= nil
-	if tree_was_open then
-		close_tree()
+function isFileManager(pane)
+	return pane.Buf.Type.Scratch and filepath.Base(pane.Buf.AbsPath) == "filemanager"
+end
+
+function indexOfTab(tab)
+	local tabs = micro.Tabs()
+	for i = 1, #tabs.List do
+		if tab == tabs.List[i] then
+			return i
+		end
 	end
 end
 
-local function on_tab_switch()
-	if tree_was_open then
-		open_tree()
+local function indexOfPane(view)
+	if view == nil then
+		return
+	end
+	local tab = view:Tab()
+	for i = 1, #tab.Panes do
+		if tab.Panes[i]:ID() == view:ID() then
+			return i
+		end
 	end
 end
 
-function preAddTab()
-	pre_tab_switch()
-end
-function preNextTab()
-	pre_tab_switch()
-end
-function prePreviousTab()
-	pre_tab_switch()
-end
-function preFirstTab()
-	if not tree_was_open then
-		-- wrapping around to the left is defined by NextTab|FirstTab, falling back from one to the other
-		-- if we run pre_tab_switch twice in a row, we'll incorrectly close the filemanager pane
-		-- XXX unsure about this
-		pre_tab_switch()
-	end
-end
-function preLastTab()
-	if not tree_was_open then
-		-- wrapping around to the left is defined by PreviousTab|LastTab
-		-- if we run pre_tab_switch twice in a row, we'll incorrectly close the filemanager pane
-		-- XXX unsure about this
-		pre_tab_switch()
-	end
-end
-function preTabSwitchCmd()
-	pre_tab_switch()
-end
+local LOG_ID = 0
 
--- @Jakku Night: Opens tree AFTER switching tabs:
-function onAddTab()
-	on_tab_switch()
-end
-function onNextTab()
-	on_tab_switch()
-end
-function onPreviousTab()
-	on_tab_switch()
-end
-function onFirstTab()
-	on_tab_switch()
-end
-function onLastTab()
-	on_tab_switch()
-end
-function onTabSwitchCmd()
-	on_tab_switch()
+function onSetActive(view)
+	if view == nil then
+		-- is this necessary? this probably is impossible
+		return
+	end
+
+	if (tree_view and tree_view:Tab()) == view:Tab() then
+		-- the active pane switched without switching tabs;
+		-- there is nothing to sync
+		return
+	end
+	-- but here, tree_view:Tab() ~= micro:CurTab(), so we need to sync
+
+	-- the old filemanager has focus if it is the current active pane on its tab
+	-- and we should preserve this state if we're on a new tab
+	local tree_visible = tree_view ~= nil
+	local tree_focused = tree_view ~= nil and (tree_view == tree_view:Tab():CurPane())
+
+	-- find the current filemanager pane on the newly-active tab
+	-- (the loop is overkill but it's future-proofing)
+	local new_tree_view = nil
+	local tab = view:Tab()
+	for i = 1, #tab.Panes do
+		if isFileManager(tab.Panes[i]) then
+			new_tree_view = tab.Panes[i]
+			break
+		end
+	end
+
+	LOG_ID = LOG_ID + 1
+	local id = LOG_ID
+	micro.Log(
+		"onSetActive["
+			.. id
+			.. "]: synchronizing Tab "
+			.. tostring(indexOfTab(tree_view and tree_view:Tab() or nil) or "nil")
+			.. ", Pane "
+			.. tostring(indexOfPane(tree_view) or "nil")
+			.. "["
+			.. (tree_visible and "(visible)" or "(hidden)")
+			.. ", "
+			.. (tree_focused and "(focused)" or "(unfocused)")
+			.. "]"
+			.. " => "
+			.. tostring(indexOfTab(view:Tab()))
+			.. ", Pane "
+			.. tostring(indexOfPane(new_tree_view) or "nil")
+			.. "; active Pane = "
+			.. tostring(indexOfPane(view) or "nil")
+	)
+
+	-- invalidate tree_view while we sync everything up
+	local old_tree_view = tree_view
+	-- tree_view = nil
+
+	-- now what
+	if tree_visible then
+		-- we *should* be shown
+		if new_tree_view == nil then
+			-- but we're not
+			micro.Log("onSetActive[" .. id .. "]: opening")
+			new_tree_view = open_tree()
+		end
+
+		-- unfocus the old view, so tab titles reflect useful information
+		-- and not just [filemanager] [filemanager] [filemanager]
+		micro.Log("onSetActive[" .. id .. "]: defocusing old_tree_view")
+		old_tree_view:NextSplit()
+
+		-- sync properties from old_tree_view
+		micro.Log("onSetActive[" .. id .. "]: copying size")
+		new_tree_view:ResizePane(old_tree_view:GetView().Width)
+		if tree_focused then
+			micro.Log("onSetActive[" .. id .. "]: focusing on " .. tostring(new_tree_view))
+			focus_pane(new_tree_view)
+		end
+	else
+		-- we should *not* be shown
+		if new_tree_view ~= nil then
+			micro.Log("onSetActive[" .. id .. "]: hiding")
+			tree_view = new_tree_view
+			close_tree()
+
+			-- XXX janky: we set tree_view = nil twice in this path,
+			-- once via close_tree() and once indirectly here
+			new_tree_view = nil
+		end
+	end
+
+	-- update the active filemanager
+	tree_view = new_tree_view
+
+	if tree_view ~= nil then
+		-- redraw
+		micro.Log("onSetActive[" .. id .. "]: redrawing")
+		refresh_view(tree_view)
+		tree_view:Tab():Resize()
+	end
+
+	micro.Log("onSetActive[" .. id .. "]: " .. "tree_view = " .. tostring(tree_view) .. " //onSetActive")
 end
 
 -- Close current
+function onQuit(view)
+	micro.Log("onQuit " .. tostring(view))
+end
 function preQuit(view)
+	micro.Log("preQuit " .. tostring(view))
 	if view == tree_view then
 		-- A fake quit function
+		micro.Log("closing current filemanager " .. tostring(view))
 		close_tree()
+		tree_view = nil
 		-- Don't actually "quit", otherwise it closes everything without saving for some reason
 		return false
 	else
-		-- @Jakku Night: Closes the tree:
-		close_tree()
-		-- Don't actually "quit", otherwise it closes everything without saving for some reason
-		return true
-	end
-end
+		-- make sure a filemanager is never left alone on a tab
+		-- by making sure when the last non-filemanager pane is closed, the file manager is also closed
+		micro.Log("Cleaning; view.Tab() = " .. tostring(view:Tab()))
+		local tab = view:Tab()
+		local stray_filemanager = nil
+		for i = 1, #tab.Panes do
+			local pane = tab.Panes[i]
+			if pane.Buf.Type.Scratch and filepath.Base(pane.Buf.AbsPath) == "filemanager" then
+				-- found a filemanager pane ... discount it.
+				micro.Log("Cleaning; found a filemanager ")
+				stray_filemanager = pane
+			end
+		end
 
--- @Jakku Night: Opens a new tree when switching to a new tab after closing the previous one:
-function onQuit()
-	open_tree()
+		micro.Log("Cleaning: stray = " .. tostring(stray_filemanager))
+		if stray_filemanager ~= nil and #tab.Panes <= 2 then
+			stray_filemanager:Quit()
+		end
+	end
 end
 
 -- Close all
@@ -1274,16 +1355,6 @@ function preMousePress(view, event)
 		return false
 	end
 	return true
-end
-
--- @Jakku Night: Opens a new tree if tab switched:
-function onMousePress(view, event)
-	if tree_view == nil then
-		return
-	end
-	if micro.CurTab() ~= tree_view:Tab() then
-		micro.InfoBar():Message("Tab was Switched.")
-	end
 end
 
 -- Up
@@ -1555,16 +1626,16 @@ function init()
 	-- TODO: Change it to work with git, based on untracked/changed/added/whatever
 	config.AddRuntimeFile("filemanager", config.RTSyntax, "syntax.yaml")
 
+	-- initial scan
+	update_current_dir(current_dir)
+
 	-- NOTE: This must be below the syntax load command or coloring won't work
 	-- Just auto-open if the option is enabled
 	-- This will run when the plugin first loads
 	if config.GetGlobalOption("filemanager.openonstart") then
 		-- Check for safety on the off-chance someone's init.lua breaks this
 		if tree_view == nil then
-			open_tree()
-			-- Puts the cursor back in the empty view that initially spawns
-			-- This is so the cursor isn't sitting in the tree view at startup
-			micro.CurPane():NextSplit()
+			toggle_tree()
 		else
 			-- Log error so they can fix it
 			micro.Log(
